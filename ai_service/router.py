@@ -1,22 +1,43 @@
 # ai_service/router.py
-from fastapi import APIRouter, UploadFile, File
-from .service import extract_order_form_from_pdf, extract_order_form_from_image
+from fastapi import APIRouter, UploadFile, File, HTTPException
 import tempfile
+from pathlib import Path
 
-router = APIRouter()
+from .service import extract_order_form
+from .schemas import ExtractionResponse
 
-@router.post("/order-form/extract")
-async def extract_order_form(file: UploadFile = File(...)):
-    suffix = file.filename.lower().split(".")[-1]
-    is_pdf = suffix == "pdf"
-    with tempfile.NamedTemporaryFile(suffix="." + suffix, delete=False) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+router = APIRouter(prefix="/extract", tags=["extraction"])
 
-    if is_pdf:
-        schema = extract_order_form_from_pdf(tmp_path)
-    else:
-        schema = extract_order_form_from_image(tmp_path)
+ALLOWED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tiff"}
 
-    return {"ok": True, "data": schema.model_dump()}
+
+@router.post("/order-form", response_model=ExtractionResponse)
+async def extract_order_form_endpoint(
+    file: UploadFile = File(...)
+) -> ExtractionResponse:
+    suffix = Path(file.filename).suffix.lower()
+
+    if suffix not in ALLOWED_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {suffix}",
+        )
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        return extract_order_form(tmp_path)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
