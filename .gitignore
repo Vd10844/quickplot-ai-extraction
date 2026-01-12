@@ -1,0 +1,20 @@
+# .gitignore
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+*.log
+.DS_Store
+.env
+*.png
+*.pdf
+*.jpg
+*.jpeg
+ocr_debug_output.png
+temp/
+tmp/
